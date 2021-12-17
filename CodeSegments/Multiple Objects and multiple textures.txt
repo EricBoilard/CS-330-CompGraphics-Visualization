@@ -1,0 +1,485 @@
+#include <GLEW/glew.h>
+#include <GLFW/glfw3.h>
+#include <iostream>
+
+// GLM MATH
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+// Image loading libraries
+#include <SOIL2/SOIL2.h>          
+//#define STB_IMAGE_IMPLEMENTATION
+//#include <stb/stb_image.h> 
+
+using namespace std; 
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void processInput(GLFWwindow* window);
+
+int main(void);
+
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+bool firstMouse = true;
+float yaw = -90.0f;	// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
+float pitch = 0.0f;
+float lastX = 1080.0f / 2.0;
+float lastY = 720.0 / 2.0;
+float fov = 45.0f;
+
+// timing
+float deltaTime = 0.0f;	// time between current frame and last frame
+float lastFrame = 0.0f;
+
+void draw() {
+    GLenum mode = GL_TRIANGLES;
+    GLint first = 0;
+    GLsizei count = 54;
+
+    glDrawArrays(mode, first, count);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+
+/* Create and compile shaders */
+static GLuint CompileShader(const string& source, GLuint shaderType) {
+    // shader object
+    GLuint shaderID = glCreateShader(shaderType);
+    const char* src = source.c_str();
+
+    // attach source code to the shader object
+    glShaderSource(shaderID, 1, &src, nullptr);
+
+    // compile shader
+    glCompileShader(shaderID);
+
+    // return the ID of compiled shader
+    return shaderID;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+
+/* Create program object */
+static GLuint CreateShaderProgram(const string& vertexShader, const string& fragmentShader) {
+    // compile vertex shader
+    GLuint vertexShaderComp = CompileShader(vertexShader, GL_VERTEX_SHADER);
+
+    // compile fragment shader
+    GLuint fragmentShaderComp = CompileShader(fragmentShader, GL_FRAGMENT_SHADER);
+
+    // create a program object
+    GLuint shaderProgram = glCreateProgram();
+
+    // Attach vertex and fragment shaders to program object
+    glAttachShader(shaderProgram, vertexShaderComp);
+    glAttachShader(shaderProgram, fragmentShaderComp);
+
+    // link shader to create executable
+    glLinkProgram(shaderProgram);
+
+    // Delete shaders
+    glDeleteShader(vertexShaderComp);
+    glDeleteShader(fragmentShaderComp);
+
+    // return shader program
+    return shaderProgram;
+}
+//--------------------------------------------------------------------------------------------------------------------------------------
+
+// Process all input
+void processInput(GLFWwindow* window) {
+
+    //const float cameraSpeed = 0.05f; // adjust accordingly
+
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) // if escape key is pressed the opengl window closes
+        glfwSetWindowShouldClose(window, true);
+
+    float cameraSpeed = 2.5 * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+    //else if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------------
+
+int main(void)
+{
+    GLFWwindow* window;
+
+    /* Initialize the library */
+    if (!glfwInit())
+        return -1;
+
+    /* Create a windowed mode window and its OpenGL context */
+    window = glfwCreateWindow(2160, 1080, "Main Window", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        return -1;
+    }
+
+    /* Make the window's context current */
+    glfwMakeContextCurrent(window);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetCursorPosCallback(window, mouse_callback);
+
+    // tell GLFW to capture our mouse
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+    /* Initialize GLEW */
+    if (glewInit() != GLEW_OK)
+        cout << "Error!" << endl;
+
+    //--------------------------------------------------------------------------------------------------------------------------------------
+
+    GLfloat vertices[] = {  /* creating a vertex array to store our x, y, and z positions */
+
+       -0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+        0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+        0.0f, 0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+
+       -0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+        0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+        0.0f, 0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+
+       -0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.5f, 0.5f,
+       -0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+        0.0f, 0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+
+        0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.5f, 0.5f,
+        0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+        0.0f, 0.5f, 0.0f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+
+        0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.5f, 0.5f,
+        0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+       -0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+
+       -0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   0.5f, 0.5f,
+       -0.5f,-0.5f,-0.5f,   1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+        0.5f,-0.5f, 0.5f,   1.0f, 1.0f, 1.0f,   1.0f, 0.0f
+
+    };
+
+    GLfloat secondVertices[] = {  /* creating a vertex array to store our x, y, and z positions */
+
+       // bottom of cutting board
+        -2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+         2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+         2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+         2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+        -2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+        -2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+
+        // top of cutting board
+        -2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+         2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+         2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+         2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+        -2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+        -2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+
+        // front of cutting board
+        -2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+         2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+         2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+         2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+        -2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+        -2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+
+        // right side cutting board
+         2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+         2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+         2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+         2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+         2.0f, 0.2f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+         2.0f, 0.0f,  2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+
+         // back of cutting board
+         2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+        -2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+        -2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+        -2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+         2.0f, 0.2f, -2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+         2.0f, 0.0f, -2.0f,     1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+
+         // lfet side of cutting board
+         -2.0f, 0.0f, -2.0f,    1.0f, 1.0f, 1.0f,   0.0f, 0.0f,
+         -2.0f, 0.0f,  2.0f,    1.0f, 1.0f, 1.0f,   1.0f, 0.0f,
+         -2.0f, 0.2f,  2.0f,    1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+
+         -2.0f, 0.2f,  2.0f,    1.0f, 1.0f, 1.0f,   1.0f, 1.0f,
+         -2.0f, 0.2f, -2.0f,    1.0f, 1.0f, 1.0f,   0.0f, 1.0f,
+         -2.0f, 0.0f, -2.0f,    1.0f, 1.0f, 1.0f,   0.0f, 0.0f
+
+    };
+
+    //--------------------------------------------------------------------------------------------------------------------------------------
+
+    GLuint VBO, VAO, secondVBO, secondVAO; // Vertex vuffer object gets vertices on screen, EBO gets elements on screen for indices, VAO acts as a container for VBO and EBO
+
+    glGenBuffers(1, &VBO); // Create vertex buffer object
+    glGenBuffers(1, &secondVBO);
+
+    glGenVertexArrays(1, &VAO); // Create our vertex array object which acts as a container for EBO and VBO
+    glGenVertexArrays(1, &secondVAO);
+
+    //-------------------------------------------------------
+
+    glBindVertexArray(VAO); // select our VAO
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO); // select VBO
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); // load vertex attributes, type size data and draw
+
+    /* specify attribute location and layout to gpu */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+
+    /* for color */
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)(3 * sizeof(GL_FLOAT)));
+    glEnableVertexAttribArray(1);
+
+    // for our textures
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)(6 * sizeof(GL_FLOAT)));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0); // closing it off
+
+    //-------------------------------------------------------
+
+    glBindVertexArray(secondVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, secondVBO); // select VBO
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(secondVertices), secondVertices, GL_STATIC_DRAW); // load vertex attributes, type size data and draw
+
+    /* specify attribute location and layout to gpu */
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+
+    /* for color */
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)(3 * sizeof(GL_FLOAT)));
+    glEnableVertexAttribArray(1);
+
+    // for our textures
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GL_FLOAT), (GLvoid*)(6 * sizeof(GL_FLOAT)));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0); // closing it off
+
+
+    //--------------------------------------------------------------------------------------------------------------------------------------
+
+    // Load Textures
+    int brickTexWidth, brickTexHeight, gridTexWidth, gridTexheight;
+    unsigned char* brickImage = SOIL_load_image("brick.png", &brickTexWidth, &brickTexHeight, 0, SOIL_LOAD_RGB);
+    unsigned char* gridImage = SOIL_load_image("grid.png", &gridTexWidth, &gridTexheight, 0, SOIL_LOAD_RGB);
+
+    // Generate Textures
+    GLuint brickTexture;
+    glGenTextures(1, &brickTexture);
+    glBindTexture(GL_TEXTURE_2D, brickTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, brickTexWidth, brickTexHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, brickImage);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SOIL_free_image_data(brickImage);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Generate Textures
+    GLuint gridTexture;
+    glGenTextures(1, &gridTexture);
+    glBindTexture(GL_TEXTURE_2D, gridTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, gridTexWidth, gridTexheight, 0, GL_RGB, GL_UNSIGNED_BYTE, gridImage);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    SOIL_free_image_data(gridImage);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    //-------------------------------------------------------------------------------------------------------------------
+
+    glEnable(GL_DEPTH_TEST);
+
+    /* vertex shader source code---when color information is added the shaders need to be updated */
+    string vertexShaderSource =
+        "#version 330 core\n"
+        "layout(location = 0) in vec3 vPosition;"
+        "layout(location = 1) in vec3 aColor;" // added for color attributes
+        "layout(location = 2) in vec2 texCoord;"
+        "out vec3 oColor;" // added for color attributes
+        "out vec2 oTexCoord;"
+        "uniform mat4 model;" // matrix
+        "uniform mat4 view;"  // matrix
+        "uniform mat4 projection;" // matrix
+        "void main()\n"
+        "{\n"
+        "gl_Position = projection * view * model * vec4(vPosition, 1.0f);" // matrix multiplication to get our model view projection matrix
+        "oColor = aColor;"  // added for color attributes
+        "oTexCoord = texCoord;"
+        "}\n";
+
+    /*For my reference: we added our layout in location 1 which are our color attributes from our vertex array and glVertexAttrib and we set it equal to aColor
+    then we create an output variable of oColor and set oColor to aColor so we can send it to our fragment shader. The in our fregment shader we create an input
+    variable and set our fragColor to oColor which is equal to our aColor aka color attributes.*/
+
+    /* fragment shader source code */
+    string fragmentShaderSource =
+        "#version 330 core\n"
+        "in vec3 oColor;"  // added for color attributes
+        "in vec2 oTexCoord;"
+        "out vec4 fragColor;"
+        "uniform sampler2D myTexture;"
+        "void main()\n"
+        "{\n"
+        "fragColor = texture(myTexture, oTexCoord);" // added for color attributes
+        "}\n";
+
+    //--------------------------------------------------------------------------------------------------------------------------------------
+
+    // Creating shader program
+    GLuint shaderProgram = CreateShaderProgram(vertexShaderSource, fragmentShaderSource);
+
+    fov = 90;
+
+    //--------------------------------------------------------------------------------------------------------------------------------------
+
+    /* Loop until the user closes the window */
+    while (!glfwWindowShouldClose(window))
+    {
+
+        // per-frame time logic
+        // --------------------
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        // Process input
+        processInput(window);
+
+        /* Render here */
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        //--------------------------------------------------------------------------------------------------------------------------------------
+
+        // model matrix 
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::rotate(model, glm::radians(20.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+        model = glm::scale(model, glm::vec3(2.0f, 2.0f, 2.0f));
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+
+        // view matrix
+        glm::mat4 view = glm::mat4(1.0f);
+        view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+
+        // projection matrix
+        glm::mat4 projection;
+        projection = glm::perspective(glm::radians(fov), 2160.0f / 1440.0f, 0.1f, 100.0f);
+
+        // sending the matrices to the shader
+        glUseProgram(shaderProgram);
+        unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
+        unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
+        unsigned int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+
+        //--------------------------------------------------------------------------------------------------------------------------------------
+
+        glBindTexture(GL_TEXTURE_2D, brickTexture);
+
+        glBindVertexArray(VAO); // activate in every frame
+
+        // Draw triangle
+        draw();
+
+        glBindVertexArray(0); // deactivate in every frame
+
+        //-------------------------------------------------
+
+        glBindTexture(GL_TEXTURE_2D, gridTexture);
+
+        glBindVertexArray(secondVAO);
+
+        draw();
+
+        glBindVertexArray(0); // deactivate in every frame
+
+        //------------------------------------------------
+
+
+        glUseProgram(0);
+
+        /* Swap front and back buffers */
+        glfwSwapBuffers(window);
+
+        /* Poll for and process events */
+        glfwPollEvents();
+    }
+
+    glfwTerminate();
+    return 0;
+}
+
+// glfw: whenever the mouse moves, this callback is called
+//--------------------------------------------------------------------------------------------------------------------------------------
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.1f; // change this value to your liking
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    // make sure that when pitch is out of bounds, screen doesn't get flipped
+    if (pitch > 89.0f)
+        pitch = 89.0f;
+    if (pitch < -89.0f)
+        pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+}
+
+// glfw: whenever the mouse scroll wheel scrolls, this callback is called
+//--------------------------------------------------------------------------------------------------------------------------------------
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    fov -= (float)yoffset;
+    if (fov < 1.0f)
+        fov = 1.0f;
+    if (fov > 45.0f)
+        fov = 45.0f;
+}
